@@ -117,6 +117,8 @@ function Clear-StagedUpdates {
     }
     Write-Host "  已暂停更新相关服务" -ForegroundColor Gray
 
+    $freeBefore = (Get-PSDrive C).Free / 1GB
+
     # 2. 逐个清理目标目录
     $targets = @(
         'C:\Windows\SoftwareDistribution\Download',  # 更新下载缓存
@@ -126,20 +128,21 @@ function Clear-StagedUpdates {
     )
     foreach ($t in $targets) {
         if (-not (Test-Path $t)) { Write-Host "  跳过(不存在): $t" -ForegroundColor Gray; continue }
-        $before = (Get-ChildItem $t -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1GB
-        # 这些目录多归 TrustedInstaller/SYSTEM 所有，先取得所有权与权限再删
-        & takeown /f "$t" /r /d y  2>&1 | Out-Null
-        & icacls  "$t" /grant "*S-1-5-32-544:F" /t /c 2>&1 | Out-Null
-        Remove-Item -Path "$t\*" -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path "$t"   -Recurse -Force -ErrorAction SilentlyContinue
-        $left = Test-Path $t
-        Write-Host ("  {0,-40} 约 {1,6:N2} GB -> {2}" -f $t, $before, $(if ($left) {'部分残留(可重启后再清)'} else {'已删除'})) -ForegroundColor Green
+        Write-Host "  正在删除: $t ..." -ForegroundColor Gray
+        # 轻量直删：单个原生进程整体递归删除（避免 takeown 逐文件导致的 R6016 资源耗尽）
+        cmd /c "rd /s /q `"$t`"" 2>$null
+        # 仍有残留（被保护文件）才兜底取一次所有权后再删
+        if (Test-Path $t) {
+            cmd /c "takeown /f `"$t`" /r /d y >nul 2>&1 & icacls `"$t`" /grant *S-1-5-32-544:F /t /c >nul 2>&1 & rd /s /q `"$t`"" 2>$null
+        }
+        Write-Host ("    -> {0}" -f $(if (Test-Path $t) {'仍有残留(可重启后再试一次)'} else {'已删除'})) -ForegroundColor Green
     }
 
     # 3. 把 Windows Update 服务恢复到“手动”（保持方案一：仍可手动更新）
     Set-Service -Name wuauserv -StartupType Manual -ErrorAction SilentlyContinue
 
-    Write-Host "完成。已暂存的升级包被清理，自动更新策略保持不变。" -ForegroundColor Green
+    $freeAfter = (Get-PSDrive C).Free / 1GB
+    Write-Host ("完成。C 盘剩余 {0:N2} GB -> {1:N2} GB（腾出约 {2:N2} GB），自动更新策略保持不变。" -f $freeBefore, $freeAfter, ($freeAfter - $freeBefore)) -ForegroundColor Green
 }
 
 # 查看当前状态
