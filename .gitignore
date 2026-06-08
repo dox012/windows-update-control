@@ -10,3 +10,11 @@ desktop.ini
 # Logs / temp
 *.log
 *.tmp
+
+# Images / screenshots (avoid accidentally committing截图)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.webp
