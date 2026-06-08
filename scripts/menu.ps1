@@ -12,6 +12,7 @@ function Show-Menu {
     Write-Host "  [2] 彻底禁用（服务级，手动更新也会失效）" -ForegroundColor Yellow
     Write-Host "  [3] 恢复默认（还原正常更新）"
     Write-Host "  [4] 查看当前状态"
+    Write-Host "  [5] 清理已暂存的更新/升级包（腾出磁盘，取消待装的功能升级）" -ForegroundColor Yellow
     Write-Host "  [0] 退出"
     Write-Host ""
 }
@@ -31,6 +32,12 @@ function Show-Menu {
         }
         '3' { Restore-Updates;       Read-Host "`n按回车返回菜单" }
         '4' { Get-UpdateStatus;      Read-Host "`n按回车返回菜单" }
+        '5' {
+            Write-Host "`n将删除已下载/暂存的更新文件（含等待重启的功能升级包），可腾出磁盘空间。" -ForegroundColor Yellow
+            $c = Read-Host "确认清理？(y/N)"
+            if ($c -eq 'y' -or $c -eq 'Y') { Clear-StagedUpdates }
+            Read-Host "`n按回车返回菜单"
+        }
         '0' { Write-Host "已退出。" -ForegroundColor Gray; break menuLoop }
         default { Write-Host "无效选项，请重新输入。" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }

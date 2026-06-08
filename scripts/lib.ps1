@@ -107,6 +107,41 @@ function Restore-Updates {
     Write-Host "完成。建议重启后到“设置”手动检查一次更新。" -ForegroundColor Green
 }
 
+# 清理已暂存/已下载的更新与功能升级文件（如等待重启的 Win11 升级包）
+function Clear-StagedUpdates {
+    Write-Host "`n[清理] 删除已暂存的更新/升级文件..." -ForegroundColor Cyan
+
+    # 1. 先停掉占用这些文件的服务
+    foreach ($s in @('wuauserv','UsoSvc','BITS','dosvc')) {
+        Stop-Service -Name $s -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host "  已暂停更新相关服务" -ForegroundColor Gray
+
+    # 2. 逐个清理目标目录
+    $targets = @(
+        'C:\Windows\SoftwareDistribution\Download',  # 更新下载缓存
+        'C:\$WINDOWS.~BT',                            # 功能升级暂存（Win11 升级包）
+        'C:\$WINDOWS.~WS',                            # 升级介质
+        'C:\$GetCurrent'                              # 升级助手残留
+    )
+    foreach ($t in $targets) {
+        if (-not (Test-Path $t)) { Write-Host "  跳过(不存在): $t" -ForegroundColor Gray; continue }
+        $before = (Get-ChildItem $t -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1GB
+        # 这些目录多归 TrustedInstaller/SYSTEM 所有，先取得所有权与权限再删
+        & takeown /f "$t" /r /d y  2>&1 | Out-Null
+        & icacls  "$t" /grant "*S-1-5-32-544:F" /t /c 2>&1 | Out-Null
+        Remove-Item -Path "$t\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "$t"   -Recurse -Force -ErrorAction SilentlyContinue
+        $left = Test-Path $t
+        Write-Host ("  {0,-40} 约 {1,6:N2} GB -> {2}" -f $t, $before, $(if ($left) {'部分残留(可重启后再清)'} else {'已删除'})) -ForegroundColor Green
+    }
+
+    # 3. 把 Windows Update 服务恢复到“手动”（保持方案一：仍可手动更新）
+    Set-Service -Name wuauserv -StartupType Manual -ErrorAction SilentlyContinue
+
+    Write-Host "完成。已暂存的升级包被清理，自动更新策略保持不变。" -ForegroundColor Green
+}
+
 # 查看当前状态
 function Get-UpdateStatus {
     Write-Host "`n===== 当前 Windows 更新状态 =====" -ForegroundColor Cyan
