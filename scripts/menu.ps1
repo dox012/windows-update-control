@@ -16,7 +16,9 @@ function Show-Menu {
     Write-Host ""
 }
 
-while ($true) {
+# 注意：switch 内的 break 只会跳出 switch，无法退出 while，
+# 因此给循环加标签，用 `break :menuLoop` 才能真正退出。
+:menuLoop while ($true) {
     Show-Menu
     $choice = Read-Host "请输入选项编号"
     switch ($choice) {
@@ -29,7 +31,7 @@ while ($true) {
         }
         '3' { Restore-Updates;       Read-Host "`n按回车返回菜单" }
         '4' { Get-UpdateStatus;      Read-Host "`n按回车返回菜单" }
-        '0' { break }
+        '0' { Write-Host "已退出。" -ForegroundColor Gray; break menuLoop }
         default { Write-Host "无效选项，请重新输入。" -ForegroundColor Red; Start-Sleep -Seconds 1 }
     }
 }

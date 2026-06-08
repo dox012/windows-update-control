@@ -5,7 +5,6 @@
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
 $Script:AUPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
-$Script:WUPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
 
 # 受影响的服务及其“恢复时”的默认启动类型
 $Script:Services = @(
@@ -75,14 +74,16 @@ function Disable-UpdateService {
 function Restore-Updates {
     Write-Host "`n[恢复] 还原 Windows 更新到默认状态..." -ForegroundColor Cyan
 
-    # 删除注册表策略项
-    foreach ($n in @('NoAutoUpdate','AUOptions','NoAutoRebootWithLoggedOnUsers')) {
-        if (Test-Path $Script:AUPath) {
+    # 仅删除本工具写入的策略项，不动 AU 键里可能存在的其他设置
+    if (Test-Path $Script:AUPath) {
+        foreach ($n in @('NoAutoUpdate','AUOptions','NoAutoRebootWithLoggedOnUsers')) {
             Remove-ItemProperty -Path $Script:AUPath -Name $n -ErrorAction SilentlyContinue
         }
-    }
-    if (Test-Path $Script:AUPath) {
-        Remove-Item -Path $Script:AUPath -Force -ErrorAction SilentlyContinue
+        # 若 AU 键已无任何值和子项，则连空壳一并清理
+        $au = Get-Item -Path $Script:AUPath
+        if ($au.ValueCount -eq 0 -and $au.SubKeyCount -eq 0) {
+            Remove-Item -Path $Script:AUPath -Force -ErrorAction SilentlyContinue
+        }
     }
     Write-Host "  ✓ 已清除自动更新策略项" -ForegroundColor Green
 
